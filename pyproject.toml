@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "sioyek"
+version = "0.31.3"
+authors = [
+  { name="Ali Mostafavi", email="a.hr.mostafavi@gmail.com" },
+]
+description = "Python tools and extensions for sioyek PDF reader"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+	"License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "PyMuPDF  >= 1.2.1",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/ahrm/sioyek-python-extensions"
+"Bug Tracker" = "https://github.com/ahrm/sioyek-python-extensions/issues"

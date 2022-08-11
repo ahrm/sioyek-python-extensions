@@ -1,0 +1,1 @@
+Python wrapper and simple addonn for sioyek PDF viewer. For more information see github page.
