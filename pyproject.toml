@@ -18,6 +18,7 @@ classifiers = [
 ]
 dependencies = [
   "PyMuPDF  >= 1.2.1",
+  "googletrans  >= 3.0.0",
 ]
 
 [project.urls]
