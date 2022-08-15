@@ -1,4 +1,4 @@
-Python wrapper and simple addons for the sioyek PDF viewer. For more information see github page. Addons:
+Python wrapper and simple addons for the sioyek PDF viewer. Addons:
 
 * `paper_downloader`: Download the paper name under cursor from google scholar or scihub and open the document
 * `dual_panelify`: Create a dual panel version of the current PDF file
