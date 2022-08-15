@@ -6,6 +6,7 @@ import regex
 import sqlite3
 import subprocess
 import sys
+import math
 
 import fitz
 
@@ -31,6 +32,40 @@ def merge_rects(rects):
             resulting_rects.append(rect)
     return resulting_rects
 
+def point_distance(p1, p2):
+    return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
+
+def rect_distance(rect, point):
+    if rect.contains(point):
+        return 0
+    else:
+        center = rect.x0 + rect.width / 2, rect.y0 + rect.height / 2
+        return point_distance(center, point)
+
+def get_closest_rect_to_point(rects, point):
+    closest_rect = None
+    closest_distance = None
+    for rect in rects:
+        distance = rect_distance(rect, point)
+        if closest_distance == None or distance < closest_distance:
+            closest_distance = distance
+            closest_rect = rect
+    return closest_rect
+
+def get_bounding_box(rects):
+    if len(rects) == 0:
+        return fitz.Rect(0, 0, 0, 0)
+
+    ll_x, ll_y, ur_x, ur_y = rects[0]
+
+    for rect in rects[1:]:
+        ll_x = min(ll_x, rect[0])
+        ur_x = max(ur_x, rect[2])
+
+        ll_y = min(ll_y, rect[1])
+        ur_y = max(ur_y, rect[3])
+
+    return fitz.Rect(ll_x, ll_y, ur_x, ur_y)
 class Sioyek:
 
     def __init__(self, sioyek_path, local_database_path=None, shared_database_path=None):
@@ -531,6 +566,12 @@ class Highlight:
     def get_end_document_pos(self):
         end_page, end_offset_y = self.doc.absolute_to_document_y(self.selection_end[1])
         return DocumentPos(end_page, self.selection_end[0], end_offset_y)
+    
+    def get_begin_abs_pos(self):
+        return AbsoluteDocumentPos(self.selection_begin[0], self.selection_begin[1])
+
+    def get_end_abs_pos(self):
+        return AbsoluteDocumentPos(self.selection_end[0], self.selection_end[1])
 
     
     def __repr__(self):
@@ -573,9 +614,12 @@ class Document:
             page += 1
         return (page, offset_y)
 
-    def to_document(self, absolute_document_pos):
+    def to_document(self, absolute_document_pos, pypdf=False):
         page, offset_y = self.absolute_to_document_y(absolute_document_pos.offset_y)
-        return DocumentPos(page, absolute_document_pos.offset_x, offset_y)
+        if pypdf:
+            return DocumentPos(page, absolute_document_pos.offset_x + self.page_widths[page] / 2, offset_y)
+        else:
+            return DocumentPos(page, absolute_document_pos.offset_x, offset_y)
 
     
     @lru_cache(maxsize=None)
@@ -814,5 +858,44 @@ class Document:
         highlights = [Highlight(self, text, highlight_type, (begin_x, begin_y), (end_x, end_y)) for _, _, text, highlight_type, begin_x, begin_y, end_x, end_y in cursor.fetchall()]
         return highlights
     
+    def get_page_selection(self, page_number, selection_begin_x, selection_begin_y, selection_end_x, selection_end_y):
+        in_range = False
+        page = self.get_page(page_number)
+        words = page.get_text_words()
+
+        selected_words = []
+        word_rects = [fitz.Rect(*word[:4]) for word in words]
+        start_closest_rect = get_closest_rect_to_point(word_rects, (selection_begin_x, selection_begin_y))
+        end_closest_rect = get_closest_rect_to_point(word_rects, (selection_end_x, selection_end_y))
+
+        for word_item, word_rect in zip(words, word_rects):
+            if start_closest_rect == word_rect:
+                in_range = True
+            if in_range:
+                selected_words.append(word_item)
+            if end_closest_rect == word_rect:
+                in_range = False
+
+        return selected_words, page_number
+
+    def get_selected_words(self, selection_begin, selection_end):
+
+        selection_begin_doc = self.to_document(selection_begin, pypdf=True)
+        selection_end_doc = self.to_document(selection_end, pypdf=True)
+
+        if selection_begin_doc.page == selection_end_doc.page:
+            return self.get_page_selection(selection_begin_doc.page,
+                                           selection_begin_doc.offset_x,
+                                           selection_begin_doc.offset_y,
+                                           selection_end_doc.offset_x,
+                                           selection_end_doc.offset_y)
+        return [], -1
+
+    def get_highlight_bounding_box(self, selection_begin, selection_end):
+
+        words, page_number = self.get_selected_words(selection_begin, selection_end)
+        word_bounding_boxes = [fitz.Rect(*x[:4]) for x in words]
+        highlight_bounding_box = get_bounding_box(word_bounding_boxes)
+        return highlight_bounding_box, page_number
     def close(self):
         self.doc.close()

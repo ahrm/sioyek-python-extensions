@@ -19,6 +19,10 @@ classifiers = [
 dependencies = [
   "PyMuPDF  >= 1.2.1",
   "googletrans  >= 3.0.0",
+  "appdirs  >= 1.4.4",
+  "PyPaperBot  >= 1.2.0",
+  "PyPDF2  >= 2.8.0",
+  "numpy  >= 1.21.0",
 ]
 
 [project.urls]
