@@ -23,6 +23,7 @@ dependencies = [
   "PyPaperBot  >= 1",
   "PyPDF2  >= 2",
   "numpy  >= 1.8",
+  "pyperclip  >= 1.8",
 ]
 
 [project.urls]

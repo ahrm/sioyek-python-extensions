@@ -3,10 +3,14 @@ Allows sioyek to automatically download papers from scihub by clicking on their 
 
 Here is an example `prefs_user.config` file which uses this script:
 
-    new_command _download_paper_under_cursor python -m sioyek.paper_downloader "%{sioyek_path}" "%{paper_name}"
+    new_command _download_paper_under_cursor python -m sioyek.paper_downloader download "%{sioyek_path}" "%{paper_name}"
     control_click_command _download_paper_under_cursor
 
 Now, you can control+click on paper names to download them and open them in sioyek.
+
+This script can also be used to copy the bibtex of paper under cursor:
+    new_command _copy_bibtex python -m sioyek.paper_downloader copy download "%{sioyek_path}" "%{paper_name}"
+
 '''
 
 # where to put downloaded papers, if it is None, we use a default data path
@@ -23,8 +27,10 @@ import sys
 import json
 import time
 import regex
+import urllib.request
 import fitz
 
+import pyperclip
 from appdirs import user_data_dir
 from habanero import Crossref
 from PyPaperBot.__main__ import start as start_paper_download
@@ -159,22 +165,38 @@ def get_paper_file_name_with_doi_and_name(doi, paper_name):
     return download_paper_with_doi(doi, paper_name, doi_map)
 
 
+def get_bibtex(doi):
+    BASE_URL = 'http://dx.doi.org/'
+    url = BASE_URL + doi
+    req = urllib.request.Request(url)
+    req.add_header('Accept', 'application/x-bibtex')
+    with urllib.request.urlopen(req) as f:
+        bibtex = f.read().decode()
+        return bibtex
+
 if __name__ == '__main__':
 
-    SIOYEK_PATH = sys.argv[1]
+    mode = sys.argv[1]
+    SIOYEK_PATH = sys.argv[2]
     sioyek = Sioyek(SIOYEK_PATH)
-    paper_name = clean_paper_name(sys.argv[2])
+    paper_name = clean_paper_name(sys.argv[3])
 
     sioyek.set_status_string('finding doi ...')
     try:
 
-        doi = get_doi_with_name(sys.argv[2])
+        doi = get_doi_with_name(sys.argv[3])
         if doi:
-            # show_status('downloading doi: {}'.format(doi))
-            file_name = get_paper_file_name_with_doi_and_name(doi, paper_name)
-            sioyek.clear_status_string()
-            if file_name:
-                subprocess.run([SIOYEK_PATH, str(file_name), '--new-window'])
+            if mode == 'download':
+                # show_status('downloading doi: {}'.format(doi))
+                file_name = get_paper_file_name_with_doi_and_name(doi, paper_name)
+                sioyek.clear_status_string()
+                if file_name:
+                    subprocess.run([SIOYEK_PATH, str(file_name), '--new-window'])
+            else:
+                bibtex = get_bibtex(doi)
+                pyperclip.copy(bibtex)
+                sioyek.clear_status_string()
+
         else:
             sioyek.set_status_string('doi not found')
             time.sleep(5)
