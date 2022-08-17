@@ -13,7 +13,7 @@ from copy import copy
 import hashlib
 import subprocess
 
-from .sioyek import Sioyek
+from .sioyek import Sioyek, clean_path
 from PyPDF2 import PdfWriter, PdfReader
 
 LOCAL_DATABASE_FILE = None
@@ -69,9 +69,9 @@ if __name__ == '__main__':
     new_file_path = None
 
     if len(sys.argv) > 1:
-        SIOYEK_PATH = sys.argv[1]
-        LOCAL_DATABASE_FILE = sys.argv[2]
-        SHARED_DATABASE_FILE = sys.argv[3]
+        SIOYEK_PATH = clean_path(sys.argv[1])
+        LOCAL_DATABASE_FILE = clean_path(sys.argv[2])
+        SHARED_DATABASE_FILE = clean_path(sys.argv[3])
         doc_path = sys.argv[4]
         zoom_level = float(sys.argv[5])
         doc_dir = os.path.dirname(doc_path)

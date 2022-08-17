@@ -35,7 +35,7 @@ from appdirs import user_data_dir
 from habanero import Crossref
 from PyPaperBot.__main__ import start as start_paper_download
 
-from .sioyek import Sioyek
+from .sioyek import Sioyek, clean_path
 
 
 def clean_paper_name(paper_name):
@@ -177,7 +177,7 @@ def get_bibtex(doi):
 if __name__ == '__main__':
 
     mode = sys.argv[1]
-    SIOYEK_PATH = sys.argv[2]
+    SIOYEK_PATH = clean_path(sys.argv[2])
     sioyek = Sioyek(SIOYEK_PATH)
     paper_name = clean_paper_name(sys.argv[3])
 

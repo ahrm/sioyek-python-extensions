@@ -1,10 +1,10 @@
 import sys
 from googletrans import Translator
 
-from .sioyek import Sioyek
+from .sioyek import Sioyek, clean_path
 
 if __name__ == '__main__':
-    sioyek_path = sys.argv[1]
+    sioyek_path = clean_path(sys.argv[1])
     text = sys.argv[2]
     sioyek = Sioyek(sioyek_path)
     translator = Translator()

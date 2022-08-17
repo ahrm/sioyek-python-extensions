@@ -10,6 +10,16 @@ import math
 
 import fitz
 
+def clean_path(path):
+    if len(path) > 0:
+        if path[0] == "'" or path[0] == '"':
+            path = path[1:]
+        if path[-1] == "'" or path[-1] == '"':
+            path = path[:-1]
+        return path
+    else:
+        return ""
+
 def merge_rects(rects):
     '''
     Merge close rectangles in a line (e.g. rectangles corresponding to a single character or word)

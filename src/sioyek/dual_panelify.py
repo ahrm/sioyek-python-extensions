@@ -20,7 +20,7 @@ import fitz
 from copy import copy
 import numpy as np
 
-from .sioyek import Sioyek
+from .sioyek import Sioyek, clean_path
 
 from PyPDF2 import PdfWriter, PdfReader, PageObject
 
@@ -88,9 +88,9 @@ def get_document_cropbox(doc):
 if __name__ == '__main__':
     last_update_time = datetime.datetime.now()
 
-    sioyek_path = sys.argv[1]
+    sioyek_path = clean_path(sys.argv[1])
     sioyek = Sioyek(sioyek_path)
-    single_panel_file_path = sys.argv[2]
+    single_panel_file_path = clean_path(sys.argv[2])
     if len(sys.argv) > 3:
         margin_string = sys.argv[3]
         parts = margin_string.split(' ')
