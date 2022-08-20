@@ -64,3 +64,7 @@ new_command _translate_selected_text python -m sioyek.translate "%{sioyek_path}"
 new_command _translate_current_line_text python -m sioyek.translate "%{sioyek_path}" "%{line_text}"
 ```
 
+## Donation
+If you enjoy sioyek, please consider donating to support its development.
+
+<a href="https://www.buymeacoffee.com/ahrm" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
