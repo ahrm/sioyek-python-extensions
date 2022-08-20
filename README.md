@@ -3,7 +3,7 @@ Python wrapper and simple addons for the sioyek PDF viewer. Install using:
 python -m pip install sioyek
 ```
 Note that python executable name might be different in your system, for example it might be `python3` instead of `python`.
-Also note that in some AppImage builds of sioyek, "%{sioyek_path}" doesn't expand to correct AppImage, you just have to replace "%{sioyek_path}" with the exact path of sioyek AppImage on your filesystem.
+Also note that in some AppImage builds of sioyek, `"%{sioyek_path}"` doesn't expand to correct AppImage, you just have to replace `"%{sioyek_path}"` with the exact path of sioyek AppImage on your filesystem.
 
 Addons:
 
