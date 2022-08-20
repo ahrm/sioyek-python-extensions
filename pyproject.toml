@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sioyek"
-version = "0.31.2"
+version = "0.31.3"
 authors = [
   { name="Ali Mostafavi", email="a.hr.mostafavi@gmail.com" },
 ]
@@ -18,7 +18,7 @@ classifiers = [
 ]
 dependencies = [
   "PyMuPDF  >= 1.2",
-  "googletrans  >= 3.0",
+  "googletrans  == 3.1.0a0",
   "appdirs  >= 1.4",
   "PyPaperBot  >= 1",
   "PyPDF2  >= 2",
