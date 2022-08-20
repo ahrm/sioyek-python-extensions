@@ -72,7 +72,7 @@ if __name__ == '__main__':
         SIOYEK_PATH = clean_path(sys.argv[1])
         LOCAL_DATABASE_FILE = clean_path(sys.argv[2])
         SHARED_DATABASE_FILE = clean_path(sys.argv[3])
-        doc_path = sys.argv[4]
+        doc_path = clean_path(sys.argv[4])
         zoom_level = float(sys.argv[5])
         doc_dir = os.path.dirname(doc_path)
         doc_base_file_name = os.path.basename(doc_path).split('.')[0]
