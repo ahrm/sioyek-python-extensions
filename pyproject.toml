@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sioyek"
-version = "0.31.3"
+version = "0.31.4"
 authors = [
   { name="Ali Mostafavi", email="a.hr.mostafavi@gmail.com" },
 ]
@@ -24,6 +24,8 @@ dependencies = [
   "PyPDF2  >= 2",
   "numpy  >= 1.8",
   "pyperclip  >= 1.8",
+  "habanero >= 1.2.2",
+  "regex >= 2.5.83",
 ]
 
 [project.urls]
