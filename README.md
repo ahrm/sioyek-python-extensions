@@ -65,6 +65,10 @@ new_command _translate_selected_text python -m sioyek.translate "%{sioyek_path}"
 new_command _translate_current_line_text python -m sioyek.translate "%{sioyek_path}" "%{line_text}"
 ```
 
+## User Scripts
+Here is a list of scripts created by sioyek users:
+* A script to import annotations for koreader: https://github.com/blob42/koreader-sioyek-import
+
 ## Donation
 If you enjoy sioyek, please consider donating to support its development.
 
