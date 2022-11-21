@@ -646,15 +646,23 @@ class AbsoluteDocumentPos:
 
 class Highlight:
 
+    def __init__(self, document, text, highlight_type, begin, end):
+        self.doc = document
+        self.text = text
+        self.highlight_type = highlight_type
+        self.selection_begin = begin
+        self.selection_end = end
+
     def insert(self, document):
-        INSERT_QUERY = "INSERT INTO highlights (document_path, desc, type, begin_x, begin_y, end_x, end_y) VALUES ('{}', '{}', '{}', {}, {}, {}, {})"
+        INSERT_QUERY = "INSERT INTO highlights (document_path, desc, type, begin_x, begin_y, end_x, end_y) VALUES (?, ?, ?, ?, ?, ?, ?)"
         path_hash_map = document.sioyek.get_path_hash_map()
         document_hash = path_hash_map[document.path.replace('\\', '/')]
 
         begin_abs_pos = self.get_begin_abs_pos()
         end_abs_pos = self.get_end_abs_pos()
 
-        query = INSERT_QUERY.format(
+        cursor = self.doc.sioyek.shared_database.cursor()
+        cursor.execute(INSERT_QUERY, (
             document_hash,
             self.text,
             self.highlight_type,
@@ -662,23 +670,9 @@ class Highlight:
             begin_abs_pos.offset_y,
             end_abs_pos.offset_x,
             end_abs_pos.offset_y
-        )
-
-        cursor = self.doc.sioyek.shared_database.cursor()
-        cursor.execute(query)
+        ))
         cursor.close()
 
-        # self.doc = document
-        # self.text = text
-        # self.highlight_type = highlight_type
-        # self.selection_begin = begin
-        # self.selection_end = end
-    def __init__(self, document, text, highlight_type, begin, end):
-        self.doc = document
-        self.text = text
-        self.highlight_type = highlight_type
-        self.selection_begin = begin
-        self.selection_end = end
     
     def get_begin_document_pos(self):
         begin_page, begin_offset_y = self.doc.absolute_to_document_y(self.selection_begin[1])
@@ -700,25 +694,19 @@ class Highlight:
 
 class Bookmark:
 
-    def insert(self, document):
-        INSERT_QUERY = "INSERT INTO bookmarks (document_path, desc, offset_y) VALUES ('{}', '{}', {})"
-        path_hash_map = document.sioyek.get_path_hash_map()
-        document_hash = path_hash_map[document.path.replace('\\', '/')]
-
-        query = INSERT_QUERY.format(
-            document_hash,
-            self.description,
-            self.y_offset,
-        )
-
-        cursor = self.doc.sioyek.shared_database.cursor()
-        cursor.execute(query)
-        cursor.close()
-
     def __init__(self, document, description, y_offset):
         self.doc = document
         self.description = description
         self.y_offset = y_offset
+
+    def insert(self, document):
+        INSERT_QUERY = "INSERT INTO bookmarks (document_path, desc, offset_y) VALUES (?, ?, ?)"
+        path_hash_map = document.sioyek.get_path_hash_map()
+        document_hash = path_hash_map[document.path.replace('\\', '/')]
+
+        cursor = self.doc.sioyek.shared_database.cursor()
+        cursor.execute(INSERT_QUERY, (document_hash, self.description, self.y_offset))
+        cursor.close()
     
     @lru_cache(maxsize=None)
     def get_document_position(self):
