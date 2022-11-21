@@ -12,11 +12,9 @@ if __name__ == '__main__':
     else:
         embed_method = 'custom'
 
-
     sioyek = Sioyek(SIOYEK_PATH, LOCAL_DATABASE_PATH, SHARED_DATABASE_PATH)
-    sioyek.set_highlight_embed_method(embed_method)
     document = sioyek.get_document(FILE_PATH)
-    document.embed_new_annotations(save=True)
+    document.import_annotations()
     document.close()
     sioyek.reload()
     sioyek.close()

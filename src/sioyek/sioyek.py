@@ -7,8 +7,54 @@ import sqlite3
 import subprocess
 import sys
 import math
+from collections import defaultdict
 
 import fitz
+
+COLOR_MAP = {'a': (0.94, 0.64, 1.00),
+            'b': (0.00, 0.46, 0.86),
+            'c': (0.60, 0.25, 0.00),
+            'd': (0.30, 0.00, 0.36),
+            'e': (0.10, 0.10, 0.10),
+            'f': (0.00, 0.36, 0.19),
+            'g': (0.17, 0.81, 0.28),
+            'h': (1.00, 0.80, 0.60),
+            'i': (0.50, 0.50, 0.50),
+            'j': (0.58, 1.00, 0.71),
+            'k': (0.56, 0.49, 0.00),
+            'l': (0.62, 0.80, 0.00),
+            'm': (0.76, 0.00, 0.53),
+            'n': (0.00, 0.20, 0.50),
+            'o': (1.00, 0.64, 0.02),
+            'p': (1.00, 0.66, 0.73),
+            'q': (0.26, 0.40, 0.00),
+            'r': (1.00, 0.00, 0.06),
+            's': (0.37, 0.95, 0.95),
+            't': (0.00, 0.60, 0.56),
+            'u': (0.88, 1.00, 0.40),
+            'v': (0.45, 0.04, 1.00),
+            'w': (0.60, 0.00, 0.00),
+            'x': (1.00, 1.00, 0.50),
+            'y': (1.00, 1.00, 0.00),
+            'z': (1.00, 0.31, 0.02)
+}
+
+
+def color_distance(color1, color2):
+    return sum([(x-y)**2 for (x,y) in zip(color1, color2)])
+
+def find_highlight_type_with_color(color, color_map):
+
+    min_dist = color_distance(color, color_map['a'])
+    min_type = 'a'
+
+    for highlight_type, type_color in color_map.items():
+        dist = color_distance(color, type_color)
+        if dist < min_dist:
+            min_dist = dist
+            min_type = highlight_type
+
+    return min_type
 
 def clean_path(path):
     if len(path) > 0:
@@ -21,17 +67,37 @@ def clean_path(path):
         return ""
 
 def get_pdf_highlight_text(pdf_highlight, page):
-    return page.get_textbox(pdf_highlight.rect)
+    return page.get_text_selection(pdf_highlight.rect.tl, pdf_highlight.rect.br)
+
+def are_highlights_same(pdf_highlight, sioyek_highlight, pdf_highlight_text):
+    sioyek_highlight_document_pos = sioyek_highlight.get_begin_document_pos()
+    return abs(sioyek_highlight_document_pos.offset_y - pdf_highlight.rect[1]) < 50 and is_text_close_fuzzy(pdf_highlight_text, sioyek_highlight.text)
+
+def are_bookmarks_same(pdf_bookmark, sioyek_bookmark):
+    pdf_bookmark_text = pdf_bookmark.info['content']
+    pdf_bookmark_location_y = pdf_bookmark.rect.top_left.y
+    docpos = sioyek_bookmark.get_document_position()
+    return ((docpos.offset_y - pdf_bookmark_location_y) < 50) and is_text_close_fuzzy(pdf_bookmark_text, sioyek_bookmark.description)
+
 
 def is_text_close_fuzzy(str1, str2):
-    l = min(len(str1), len(str2))
-    num_errors = int(l * 0.2)
-    match1 = regex.search('(' + regex.escape(str1) + '){e<=' + str(num_errors) +'}', str2)
-    match2 = regex.search('(' + regex.escape(str1) + '){e<=' + str(num_errors) +'}', str1)
-    if match1 and match2:
-        return True
+    len1 = len(str1)
+    len2 = len(str2)
+    if max(len1, len2) < 10:
+        l = min(len(str1), len(str2))
+        num_errors = int(l * 0.2)
+        #todo: this is *extremely* slow, do something better, e.g. levenshtein distance
+        match1 = regex.search('(' + regex.escape(str1) + '){e<=' + str(num_errors) +'}', str2)
+        match2 = regex.search('(' + regex.escape(str1) + '){e<=' + str(num_errors) +'}', str1)
+        if match1 and match2:
+            return True
+        else:
+            return False
     else:
-        return False
+        # return True
+        ratio = min(len1 / len2, len2/ len1)
+        return ratio > 0.8
+
 
 def merge_rects(rects):
     '''
@@ -553,6 +619,7 @@ class Sioyek:
         self.local_database.close()
         self.shared_database.close()
 
+
     def statusbar_output(self):
 
         class StatusBarOutput(object):
@@ -579,6 +646,33 @@ class AbsoluteDocumentPos:
 
 class Highlight:
 
+    def insert(self, document):
+        INSERT_QUERY = "INSERT INTO highlights (document_path, desc, type, begin_x, begin_y, end_x, end_y) VALUES ('{}', '{}', '{}', {}, {}, {}, {})"
+        path_hash_map = document.sioyek.get_path_hash_map()
+        document_hash = path_hash_map[document.path.replace('\\', '/')]
+
+        begin_abs_pos = self.get_begin_abs_pos()
+        end_abs_pos = self.get_end_abs_pos()
+
+        query = INSERT_QUERY.format(
+            document_hash,
+            self.text,
+            self.highlight_type,
+            begin_abs_pos.offset_x,
+            begin_abs_pos.offset_y,
+            end_abs_pos.offset_x,
+            end_abs_pos.offset_y
+        )
+
+        cursor = self.doc.sioyek.shared_database.cursor()
+        cursor.execute(query)
+        cursor.close()
+
+        # self.doc = document
+        # self.text = text
+        # self.highlight_type = highlight_type
+        # self.selection_begin = begin
+        # self.selection_end = end
     def __init__(self, document, text, highlight_type, begin, end):
         self.doc = document
         self.text = text
@@ -605,6 +699,21 @@ class Highlight:
         return f"Highlight of type {self.highlight_type}: {self.text}"
 
 class Bookmark:
+
+    def insert(self, document):
+        INSERT_QUERY = "INSERT INTO bookmarks (document_path, desc, offset_y) VALUES ('{}', '{}', {})"
+        path_hash_map = document.sioyek.get_path_hash_map()
+        document_hash = path_hash_map[document.path.replace('\\', '/')]
+
+        query = INSERT_QUERY.format(
+            document_hash,
+            self.description,
+            self.y_offset,
+        )
+
+        cursor = self.doc.sioyek.shared_database.cursor()
+        cursor.execute(query)
+        cursor.close()
 
     def __init__(self, document, description, y_offset):
         self.doc = document
@@ -667,7 +776,7 @@ class Document:
     @lru_cache(maxsize=None)
     def get_page_pdf_bookmarks(self, page_number):
         def is_bookmark(annot):
-            return annot.type[1] == 'Text'
+            return annot.type[1] in ['Text', 'FreeText']
         return [annot for annot in self.get_page_pdf_annotations(page_number) if is_bookmark(annot)]
 
     @lru_cache(maxsize=None)
@@ -685,6 +794,9 @@ class Document:
         method: Can be 'fitz' or 'custom'. 'fitz' uses mupdf text search to embed the highlights (which might result in duplicate highlights).
         'custom' uses a custom algorithm based on highlight location to embed the highlights.
         """
+
+        if colormap is None:
+            colormap = COLOR_MAP
 
         method = self.sioyek.highlight_embed_method
         docpos = highlight.get_begin_document_pos()
@@ -730,9 +842,111 @@ class Document:
 
         if save:
             self.save_changes()
+
     
     def save_changes(self):
         self.doc.saveIncr()
+
+    def add_imported_bookmark(self, page, bookmark):
+        document_pos = DocumentPos(page, 0, bookmark.rect.top_left.y)
+        absolute_pos = self.to_absolute(document_pos)
+        # self.to_absolute(bookmark.)
+        new_bookmark = Bookmark(self, bookmark.info['content'], absolute_pos.offset_y)
+        new_bookmark.insert(self)
+
+    def add_imported_highlight(self, page, highlight_rect, highlight_text, highlight_type):
+
+        highlight_text = highlight_text.replace('\n', '')
+        begin_document_pos = DocumentPos(page, highlight_rect.tl.x, highlight_rect.tl.y)
+        end_document_pos = DocumentPos(page, highlight_rect.br.x, highlight_rect.br.y)
+
+        begin_abs_pos = self.to_absolute(begin_document_pos)
+        end_abs_pos = self.to_absolute(end_document_pos)
+
+        page_width = self.page_widths[page]
+        new_highlight = Highlight(
+            self,
+            highlight_text,
+            highlight_type,
+            (begin_abs_pos.offset_x - page_width/2, begin_abs_pos.offset_y),
+            (end_abs_pos.offset_x - page_width/2, end_abs_pos.offset_y)
+        )
+        new_highlight.insert(self)
+
+    def import_annotations(self, colormap=None):
+        if colormap is None:
+            colormap = COLOR_MAP
+
+        new_highlights = self.get_non_sioyek_highlights()
+        new_bookmarks = self.get_non_sioyek_bookmarks()
+
+        for page, text, hl in new_highlights:
+            color = hl.colors['stroke']
+            if colormap:
+                highlight_type = find_highlight_type_with_color(color, colormap)
+            else:
+                highlight_type = 'a'
+
+            self.add_imported_highlight(page, hl.rect, text, highlight_type)
+
+        for page, bm in new_bookmarks:
+            self.add_imported_bookmark(page, bm)
+
+        self.sioyek.shared_database.commit()
+        self.sioyek.reload()
+        # self.sioyek.shared_database.close()
+
+    def get_non_sioyek_bookmarks(self):
+        num_pages = len(self.page_heights)
+        sioyek_bookmarks = self.get_bookmarks()
+        page_sioyek_bookmarks = defaultdict(list)
+
+        for sioyek_bookmark in sioyek_bookmarks:
+            bookmark_page = sioyek_bookmark.get_document_position().page
+            page_sioyek_bookmarks[bookmark_page].append(sioyek_bookmark)
+
+        new_bookmarks = []
+
+        for page_number in range(num_pages):
+            page = self.get_page(page_number)
+            pdf_bookmarks = self.get_page_pdf_bookmarks(page_number)
+            sioyek_bookmarks = page_sioyek_bookmarks[page_number]
+            for pdf_bm in pdf_bookmarks:
+                found = False
+                for sioyek_bm in sioyek_bookmarks:
+                    if are_bookmarks_same(pdf_bm, sioyek_bm):
+                        found = True
+                        break
+                if not found:
+                    new_bookmarks.append((page_number, pdf_bm))
+        return new_bookmarks
+
+    def get_non_sioyek_highlights(self):
+        num_pages = len(self.page_heights)
+        sioyek_highlights = self.get_highlights()
+        page_sioyek_highlights = defaultdict(list)
+
+        for sioyek_highlight in sioyek_highlights:
+            highlight_page = sioyek_highlight.get_begin_document_pos().page
+            page_sioyek_highlights[highlight_page].append(sioyek_highlight)
+
+        new_highlights = []
+
+        for page_number in range(num_pages):
+            page = self.get_page(page_number)
+            pdf_highlights = self.get_page_pdf_highlights(page_number)
+            sioyek_highlights = page_sioyek_highlights[page_number]
+            for pdf_hl in pdf_highlights:
+                pdf_highlight_text = get_pdf_highlight_text(pdf_hl, page)
+                found = False
+                for sioyek_hl in sioyek_highlights:
+                    if are_highlights_same(pdf_hl, sioyek_hl, pdf_highlight_text):
+                        found = True
+                        break
+                if not found:
+                    new_highlights.append((page_number, pdf_highlight_text, pdf_hl))
+        return new_highlights
+
 
     def get_non_embedded_highlights(self):
 
@@ -745,8 +959,9 @@ class Document:
             document_page = self.get_page(highlight_document_pos.page)
             found = False
             for pdf_highlight in pdf_page_highlights:
+                #todo: swap the order of for loops so we don't compute highlight_text every iteration
                 highlight_text = get_pdf_highlight_text(pdf_highlight, document_page)
-                if (abs(highlight_document_pos.offset_y - pdf_highlight.rect[1]) < 50) and (is_text_close_fuzzy(highlight_text, highlight.text)):
+                if are_highlights_same(pdf_highlight, highlight, highlight_text):
                     found = True
                     break
             if not found:
