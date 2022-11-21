@@ -20,6 +20,19 @@ def clean_path(path):
     else:
         return ""
 
+def get_pdf_highlight_text(pdf_highlight, page):
+    return page.get_textbox(pdf_highlight.rect)
+
+def is_text_close_fuzzy(str1, str2):
+    l = min(len(str1), len(str2))
+    num_errors = int(l * 0.2)
+    match1 = regex.search('(' + regex.escape(str1) + '){e<=' + str(num_errors) +'}', str2)
+    match2 = regex.search('(' + regex.escape(str1) + '){e<=' + str(num_errors) +'}', str1)
+    if match1 and match2:
+        return True
+    else:
+        return False
+
 def merge_rects(rects):
     '''
     Merge close rectangles in a line (e.g. rectangles corresponding to a single character or word)
@@ -85,6 +98,7 @@ class Sioyek:
         self.local_database = None
         self.shared_database = None
         self.cached_path_hash_map = None
+        self.highlight_embed_method = 'fitz'
 
         if local_database_path != None:
             self.local_database_path = local_database_path
@@ -94,6 +108,9 @@ class Sioyek:
             self.shared_database_path = shared_database_path
             self.shared_database = sqlite3.connect(self.shared_database_path)
     
+    def set_highlight_embed_method(self, method):
+        self.highlight_embed_method = method
+
     def get_local_database(self):
         return self.local_database
 
@@ -660,10 +677,29 @@ class Document:
         return [annot for annot in self.get_page_pdf_annotations(page_number) if is_highlight(annot)]
 
     def embed_highlight(self, highlight, colormap=None):
+        """Embed sioyek highlights into the PDF document
+
+        Parameters:
+        highligtht: The highlight to embed
+        colormap: A dictionary mapping highlight types to colors
+        method: Can be 'fitz' or 'custom'. 'fitz' uses mupdf text search to embed the highlights (which might result in duplicate highlights).
+        'custom' uses a custom algorithm based on highlight location to embed the highlights.
+        """
+
+        method = self.sioyek.highlight_embed_method
         docpos = highlight.get_begin_document_pos()
         page = self.get_page(docpos.page)
         # quads = page.search_for(highlight.text, flags=fitz.TEXT_PRESERVE_WHITESPACE, hit_max=50)
-        quads = self.get_best_selection_rects(docpos.page, highlight.text, merge=True)
+        if method == 'fitz':
+            quads = self.get_best_selection_rects(docpos.page, highlight.text, merge=True)
+        else:
+            selection_begin_abs = AbsoluteDocumentPos(highlight.selection_begin[0], highlight.selection_begin[1])
+            selection_end_abs = AbsoluteDocumentPos(highlight.selection_end[0], highlight.selection_end[1])
+
+            selected_words = self.get_selected_words(selection_begin_abs, selection_end_abs)
+            selected_rects = [fitz.Rect(*word[:4]) for word in selected_words[0]]
+            merged_rects = merge_rects(selected_rects)
+            quads = [rect.quad for rect in merged_rects]
 
         annot = page.add_highlight_annot(quads)
         if colormap is not None:
@@ -706,9 +742,11 @@ class Document:
         for highlight in candidate_highlights:
             highlight_document_pos = highlight.get_begin_document_pos()
             pdf_page_highlights = self.get_page_pdf_highlights(highlight_document_pos.page)
+            document_page = self.get_page(highlight_document_pos.page)
             found = False
             for pdf_highlight in pdf_page_highlights:
-                if abs(highlight_document_pos.offset_y - pdf_highlight.rect[1]) < 50:
+                highlight_text = get_pdf_highlight_text(pdf_highlight, document_page)
+                if (abs(highlight_document_pos.offset_y - pdf_highlight.rect[1]) < 50) and (is_text_close_fuzzy(highlight_text, highlight.text)):
                     found = True
                     break
             if not found:
