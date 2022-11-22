@@ -77,7 +77,7 @@ def are_bookmarks_same(pdf_bookmark, sioyek_bookmark):
     pdf_bookmark_text = pdf_bookmark.info['content']
     pdf_bookmark_location_y = pdf_bookmark.rect.top_left.y
     docpos = sioyek_bookmark.get_document_position()
-    return ((docpos.offset_y - pdf_bookmark_location_y) < 50) and is_text_close_fuzzy(pdf_bookmark_text, sioyek_bookmark.description)
+    return ((docpos[1] - pdf_bookmark_location_y) < 50) and is_text_close_fuzzy(pdf_bookmark_text, sioyek_bookmark.description)
 
 
 def is_text_close_fuzzy(str1, str2):
@@ -890,7 +890,7 @@ class Document:
         page_sioyek_bookmarks = defaultdict(list)
 
         for sioyek_bookmark in sioyek_bookmarks:
-            bookmark_page = sioyek_bookmark.get_document_position().page
+            bookmark_page = sioyek_bookmark.get_document_position()[0]
             page_sioyek_bookmarks[bookmark_page].append(sioyek_bookmark)
 
         new_bookmarks = []
