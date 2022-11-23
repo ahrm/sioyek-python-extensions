@@ -773,6 +773,27 @@ class Document:
             return annot.type[1] == 'Highlight'
         return [annot for annot in self.get_page_pdf_annotations(page_number) if is_highlight(annot)]
 
+    def remove_annotations(self, page_number, rect):
+        annots = self.get_page_pdf_annotations(page_number)
+        page = self.get_page(page_number)
+
+        rect = fitz.Rect(rect)
+
+        annots_to_delete = []
+        for annot in annots:
+            if annot.rect.intersects(rect):
+                annots_to_delete.append(annot)
+        
+        for annot in annots_to_delete:
+            page.delete_annot(annot)
+        self.save_changes()
+
+    def embed_text_in_pdf(self, text, page_number, rect, params):
+        pdf_page = self.get_page(page_number)
+        annot = pdf_page.add_freetext_annot(rect, text, **params)
+        annot.update()
+        self.save_changes()
+
     def embed_highlight(self, highlight, colormap=None):
         """Embed sioyek highlights into the PDF document
 
