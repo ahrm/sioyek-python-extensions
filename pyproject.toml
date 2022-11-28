@@ -26,6 +26,7 @@ dependencies = [
   "pyperclip  >= 1.8",
   "habanero >= 1.2.2",
   "regex >= 2.5.83",
+  "PyQt5 >= 5.15"
 ]
 
 [project.urls]

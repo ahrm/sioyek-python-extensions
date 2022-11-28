@@ -8,6 +8,8 @@ import subprocess
 import sys
 import math
 from collections import defaultdict
+from PyQt5.QtNetwork import QLocalSocket
+from PyQt5.QtCore import QByteArray, QDataStream, QIODevice
 
 import fitz
 
@@ -157,7 +159,7 @@ def get_bounding_box(rects):
     return fitz.Rect(ll_x, ll_y, ur_x, ur_y)
 class Sioyek:
 
-    def __init__(self, sioyek_path, local_database_path=None, shared_database_path=None):
+    def __init__(self, sioyek_path, local_database_path=None, shared_database_path=None, force_binary=False):
         self.path = sioyek_path
         self.is_dummy_mode = False
 
@@ -165,6 +167,17 @@ class Sioyek:
         self.shared_database = None
         self.cached_path_hash_map = None
         self.highlight_embed_method = 'fitz'
+        # run the binary sioyek command instead of using local sockets
+        # it is much slower and is kept only for possible backward incompatibilities
+        self.force_binary = force_binary
+        self.connected = False
+        self.socket = None
+
+        if not force_binary:
+            self.socket = QLocalSocket()
+            self.socket.connectToServer('sioyek')
+            if self.socket.waitForConnected(1000):
+                self.connected = True
 
         if local_database_path != None:
             self.local_database_path = local_database_path
@@ -174,6 +187,9 @@ class Sioyek:
             self.shared_database_path = shared_database_path
             self.shared_database = sqlite3.connect(self.shared_database_path)
     
+    def should_use_local_socket(self):
+        return (not self.force_binary) and (self.connected)
+
     def set_highlight_embed_method(self, method):
         self.highlight_embed_method = method
 
@@ -214,7 +230,18 @@ class Sioyek:
         if self.is_dummy_mode:
             print('dummy mode, executing: ', params)
         else:
-            subprocess.run(params)
+            if self.should_use_local_socket():
+                data = QByteArray()
+                data_stream = QDataStream(data, QIODevice.WriteOnly)
+                data_stream.writeInt(len(params))
+                for param in params:
+                    data_stream.writeQString(param)
+                self.socket.write(data)
+                self.socket.flush()
+                self.socket.waitForBytesWritten(1000)
+                
+            else:
+                subprocess.run(params)
 
     def goto_begining(self, focus=False):
         self.run_command("goto_begining", None, focus=focus)
