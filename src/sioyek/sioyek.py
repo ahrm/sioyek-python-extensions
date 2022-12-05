@@ -890,11 +890,11 @@ class Document:
         new_bookmark = Bookmark(self, bookmark.info['content'], absolute_pos.offset_y)
         new_bookmark.insert(self)
 
-    def add_imported_highlight(self, page, highlight_rect, highlight_text, highlight_type):
+    def add_imported_highlight(self, page, begin_pos, end_pos, highlight_text, highlight_type):
 
         highlight_text = highlight_text.replace('\n', '')
-        begin_document_pos = DocumentPos(page, highlight_rect.tl.x, highlight_rect.tl.y)
-        end_document_pos = DocumentPos(page, highlight_rect.br.x, highlight_rect.br.y)
+        begin_document_pos = DocumentPos(page, begin_pos[0], begin_pos[1])
+        end_document_pos = DocumentPos(page, end_pos[0], end_pos[1])
 
         begin_abs_pos = self.to_absolute(begin_document_pos)
         end_abs_pos = self.to_absolute(end_document_pos)
@@ -923,14 +923,17 @@ class Document:
             else:
                 highlight_type = 'a'
 
-            self.add_imported_highlight(page, hl.rect, text, highlight_type)
+            begin_rect = hl.vertices[:4]
+            end_rect = hl.vertices[-4:]
+            begin_pos = (begin_rect[0][0], (begin_rect[0][1] + begin_rect[2][1]) / 2)
+            end_pos = (end_rect[1][0], (end_rect[0][1] + end_rect[2][1]) / 2)
+            self.add_imported_highlight(page, begin_pos, end_pos, text, highlight_type)
 
         for page, bm in new_bookmarks:
             self.add_imported_bookmark(page, bm)
 
         self.sioyek.shared_database.commit()
         self.sioyek.reload()
-        # self.sioyek.shared_database.close()
 
     def get_non_sioyek_bookmarks(self):
         num_pages = len(self.page_heights)
