@@ -65,6 +65,41 @@ new_command _translate_selected_text python -m sioyek.translate "%{sioyek_path}"
 new_command _translate_current_line_text python -m sioyek.translate "%{sioyek_path}" "%{line_text}"
 ```
 
+### -`import_annotations`
+Import PDF bookmarks and highlights into sioyek so that they are searchable.
+
+https://user-images.githubusercontent.com/6392321/205930859-79b5efb9-d159-4d92-9382-1641ae3cf01d.mp4
+
+Config:
+```
+new_command _import_annotations python -m sioyek.import_annotations "%{sioyek_path}" "%{local_database}" "%{shared_database}" "%{file_path}"
+```
+
+### -`remove_annotation`
+Remove PDF annotations.
+
+https://user-images.githubusercontent.com/6392321/205931274-ef2b20e5-0aec-478c-9dd8-ff83a5ba498b.mp4
+
+Config:
+```
+new_command _remove_annotations python -m sioyek.remove_annotation "%{sioyek_path}" "%{local_database}" "%{shared_database}" "%{file_path}" "%{selected_rect}"
+```
+
+### -`add_text`
+Add text annotation to the PDF.
+
+
+
+https://user-images.githubusercontent.com/6392321/205931938-938da231-8f2c-4f85-92a3-d7adf320f5f2.mp4
+
+
+Config:
+```
+new_command _add_text python -m sioyek.add_text "%{sioyek_path}" "%{local_database}" "%{shared_database}" "%{file_path}" "%{selected_rect}" "%{command_text}"
+new_command _add_red_text python -m sioyek.add_text "%{sioyek_path}" "%{local_database}" "%{shared_database}" "%{file_path}" "%{selected_rect}" "%{command_text}" fontsize=5 text_color=255,0,0
+```
+
+
 ## User Scripts
 Here is a list of scripts created by sioyek users:
 * A script to import annotations for koreader: https://github.com/blob42/koreader-sioyek-import
