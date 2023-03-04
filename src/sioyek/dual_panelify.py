@@ -22,7 +22,7 @@ import numpy as np
 
 from .sioyek import Sioyek, clean_path
 
-from PyPDF2 import PdfWriter, PdfReader, PageObject
+from PyPDF2 import PdfWriter, PdfReader, PageObject, Transformation
 
 UPDATE_EVERY_SECONDS = 3
 SIDE_MARGIN = 25
@@ -106,41 +106,44 @@ if __name__ == '__main__':
     doc = fitz.open(single_panel_file_path)
     cropbox = get_document_cropbox(doc)
 
-    for i in range(pdf_reader.numPages // 2):
+    for i in range(len(pdf_reader.pages) // 2):
         if (datetime.datetime.now() - last_update_time).seconds > UPDATE_EVERY_SECONDS:
             last_update_time = datetime.datetime.now()
             # subprocess.run([sioyek_path, '--execute-command', 'set_status_string', '--execute-command-data', 'Dual panelifying {} / {}'.format((i+1) * 2, pdf_reader.numPages)])
-            sioyek.set_status_string('Dual panelifying {} / {}'.format((i+1) * 2, pdf_reader.numPages))
+            sioyek.set_status_string('Dual panelifying {} / {}'.format((i+1) * 2, len(pdf_reader.pages)))
 
-        page1 = copy(pdf_reader.getPage(2 * i))
-        page2 = copy(pdf_reader.getPage(2 * i+1))
+        page1 = copy(pdf_reader.pages[2 * i])
+        page2 = copy(pdf_reader.pages[2 * i+1])
 
-        original_width1 = page1.mediaBox.width
-        original_width2 = page2.mediaBox.width
+        original_width1 = page1.mediabox.width
+        original_width2 = page2.mediabox.width
 
-        page1.mediaBox.setLowerLeft(cropbox.bottom_left)
-        page1.mediaBox.setUpperRight(cropbox.top_right)
-        page2.mediaBox.setLowerLeft(cropbox.bottom_left)
-        page2.mediaBox.setUpperRight(cropbox.top_right)
+        llx = page1.cropbox.lower_right[0]
+        lly = page1.cropbox.lower_right[1]
+        page2.cropbox.lower_left = (llx, lly)
 
-        page1.cropBox.setLowerLeft(cropbox.bottom_left)
-        page1.cropBox.setUpperRight(cropbox.top_right)
-        page2.cropBox.setLowerLeft(cropbox.bottom_left)
-        page2.cropBox.setUpperRight(cropbox.top_right)
+        urx = page1.cropbox.lower_right[0] + page2.cropbox.lower_right[0]
+        ury = page2.cropbox.upper_right[1]
+        page2.cropbox.upper_right = (urx, ury)
 
 
         # total_width = original_width1 + original_width2
-        total_width = page1.mediaBox.width + page2.mediaBox.width + 2 * SIDE_MARGIN + MIDDLE_MARGIN
-        total_height = -max([page1.mediaBox.height, page2.mediaBox.height])
-        new_page = PageObject.createBlankPage(None, total_width, total_height)
-        # new_page.mergePage(page1)
-        new_page.mergeTranslatedPage(page1, -page1.mediaBox.left + SIDE_MARGIN, 0)
-        new_page.mergeTranslatedPage(page2, page1.mediaBox.width - page1.mediaBox.left + SIDE_MARGIN + MIDDLE_MARGIN, 0)
-        # new_page.mergeTranslatedPage(page2, page1.mediaBox.width - 200, 0)
+        total_width = page1.mediabox.width + page2.mediabox.width + 2 * SIDE_MARGIN + MIDDLE_MARGIN
+        total_height = max([page1.mediabox.height, page2.mediabox.height])
+        new_page = PageObject.create_blank_page(None, total_width, total_height)
+
+        # new_page.mergeTranslatedPage(page1, -page1.mediabox.left + SIDE_MARGIN, 0)
+        page1.add_transformation(Transformation().translate( SIDE_MARGIN, 0))
+        new_page.merge_page(page1)
+
+        # new_page.mergeTranslatedPage(page2, page1.mediabox.width - page1.mediabox.left + SIDE_MARGIN + MIDDLE_MARGIN, 0)
+        page2.add_transformation(Transformation().translate(page1.mediabox.width + SIDE_MARGIN + MIDDLE_MARGIN, 0))
+        new_page.merge_page(page2)
+
         pdf_writer.add_page(new_page)
     
-    if pdf_reader.numPages % 2 == 1:
-        pdf_writer.add_page(pdf_reader.getPage(pdf_reader.numPages - 1))
+    if len(pdf_reader.pages) % 2 == 1:
+        pdf_writer.add_page(pdf_reader.pages[len(pdf_reader.pages) - 1])
 
     sioyek.set_status_string('Writing new file to disk')
     with open(dual_panel_file_path, 'wb') as f:
