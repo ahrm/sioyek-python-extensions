@@ -165,11 +165,63 @@ def get_pdf_via_unpaywall(doi, paper_name):
 
     return pdf_path
 
+def get_pdf_via_crossref(doi_string, paper_name):
+    crossref_url = f"https://api.crossref.org/works/{doi_string}"
+
+    print(f"Getting DOI {doi_string} from Crossref")
+
+    if sioyek:
+        sioyek.set_status_string(f"Getting DOI {doi_string} from Crossref")
+
+    crossref_resp = requests.get(crossref_url)
+    if crossref_resp.status_code == 404:
+        print(f"DOI {doi_string} not found in Crossref")
+        raise Exception(f"DOI {doi_string} not found in Crossref")
+
+    print(f"Got DOI {doi_string} from Crossref")
+
+    crossref_resp_json = crossref_resp.json()
+
+    if 'message' not in crossref_resp_json or 'link' not in crossref_resp_json['message']:
+        print(f"DOI {doi_string} not found in Crossref")
+        raise Exception(f"DOI {doi_string} not found in Crossref")
+
+    pdf_url = None
+    for link in crossref_resp_json['message']['link']:
+        possible_url = link['URL']
+        if possible_url.endswith('.pdf'):
+            pdf_url = possible_url
+            break
+        
+        if link['content-type'] == 'application/pdf' or link['intended-application'] == 'similarity-checking':
+            pdf_url = possible_url
+            break
+            
+    if pdf_url is None:
+        print(f"DOI {doi_string} not found in Crossref")
+        raise Exception(f"DOI {doi_string} not found in Crossref")
+
+    print(f"Downloading {pdf_url} from Crossref")
+
+    if sioyek:
+        sioyek.set_status_string(f"Downloading {pdf_url} from Crossref")
+
+    pdf_path = get_papers_folder_path() / (paper_name + '.pdf')
+
+    print(f"Saving {pdf_url} to {pdf_path}")
+
+    with open(pdf_path, 'wb+') as outfile:
+        outfile.write(requests.get(pdf_url).content)
+
+
+    return pdf_path
+
 def download_paper_with_doi(doi_string, paper_name, doi_map):
     download_dir = get_papers_folder_path()
     method_args_and_kwargs = [
         ("scihub", start_paper_download, ("", None, None, download_dir, None), {'DOIs': [doi_string]}),
         ("unpaywall", get_pdf_via_unpaywall, (doi_string, paper_name), {}),
+        ("crossref", get_pdf_via_crossref, (doi_string, paper_name), {}),
     ]
 
     with ListingDiff(download_dir) as listing_diff:
