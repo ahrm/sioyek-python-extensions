@@ -32,12 +32,14 @@ import urllib.request
 import fitz
 import requests
 from difflib import SequenceMatcher
+import shutil
 
 import pyperclip
 from appdirs import user_data_dir
 from habanero import Crossref
 from PyPaperBot.__main__ import start as start_paper_download
 from libgen_api import LibgenSearch
+from slugify import slugify
 
 from .sioyek import Sioyek, clean_path
 
@@ -140,8 +142,8 @@ def get_doi_with_name(paper_name):
 
 def get_pdf_via_unpaywall(doi, paper_name):
     print(f"Getting DOI {doi} from Unpaywall")
-    if sioyek:
-        sioyek.set_status_string(f"Getting DOI {doi} from Unpaywall")
+    set_sioyek_status_if_exists(f"Getting DOI {doi} from Unpaywall")
+
     unpaywall_url = f"https://api.unpaywall.org/v2/{doi}?email={USER_EMAIL}"
     unpaywall_resp = requests.get(unpaywall_url)
     if unpaywall_resp.status_code == 404:
@@ -168,10 +170,10 @@ def get_pdf_via_unpaywall(doi, paper_name):
 
     print(f"Downloading {pdf_url} from Unpaywall")
 
-    if sioyek:
-        sioyek.set_status_string(f"Downloading {pdf_url} from Unpaywall")
+    set_sioyek_status_if_exists(f"Downloading {pdf_url} from Unpaywall")
 
-    pdf_path = get_papers_folder_path() / (unpaywall_resp_json['title'] + ' - Unpaywall.pdf')
+    valid_filename = slugify(unpaywall_resp_json['title'])
+    pdf_path = get_papers_folder_path() / (valid_filename + '-Unpaywall.pdf')
 
     print(f"Saving {pdf_url} to {pdf_path}")
     with open(pdf_path, 'wb+') as outfile:
@@ -184,8 +186,7 @@ def get_book_via_libgen(book_name):
 
     print(f"Getting book {book_name} from Libgen")
 
-    if sioyek:
-        sioyek.set_status_string(f"Getting book {book_name} from Libgen")
+    set_sioyek_status_if_exists(f"Getting book {book_name} from Libgen")
 
     results = s.search_title_filtered(book_name, {"Extension": "pdf"})
 
@@ -198,10 +199,10 @@ def get_book_via_libgen(book_name):
     pdf_url = s.resolve_download_links(results[0])['Cloudflare']
     print(f"Downloading {pdf_url} from Libgen")
 
-    if sioyek:
-        sioyek.set_status_string(f"Downloading {pdf_url} from Libgen")
+    set_sioyek_status_if_exists(f"Downloading {pdf_url} from Libgen")
 
-    pdf_path = get_papers_folder_path() / (results[0]["Title"] + ' - Libgen.pdf')
+    valid_filename = slugify(results[0]["Title"])
+    pdf_path = get_papers_folder_path() / (valid_filename + '-Libgen.pdf')
 
     print(f"Saving {pdf_url} to {pdf_path}")
 
@@ -215,8 +216,7 @@ def get_pdf_via_crossref(doi_string, paper_name):
 
     print(f"Getting DOI {doi_string} from Crossref")
 
-    if sioyek:
-        sioyek.set_status_string(f"Getting DOI {doi_string} from Crossref")
+    set_sioyek_status_if_exists(f"Getting DOI {doi_string} from Crossref")
 
     crossref_resp = requests.get(crossref_url)
     if crossref_resp.status_code == 404:
@@ -258,10 +258,10 @@ def get_pdf_via_crossref(doi_string, paper_name):
 
     print(f"Downloading {pdf_url} from Crossref")
 
-    if sioyek:
-        sioyek.set_status_string(f"Downloading {pdf_url} from Crossref")
+    set_sioyek_status_if_exists(f"Downloading {pdf_url} from Crossref")
 
-    pdf_path = get_papers_folder_path() / (crossref_resp_json['message']['title'][0] + ' - Crossref.pdf')
+    valid_filename = slugify(crossref_resp_json['message']['title'][0])
+    pdf_path = get_papers_folder_path() / (valid_filename + '-Crossref.pdf')
 
     print(f"Saving {pdf_url} to {pdf_path}")
 
@@ -284,13 +284,11 @@ def download_paper_with_doi(doi_string, paper_name, doi_map):
         ignored_files = []
 
         for method_name, callback, method_args, method_kwargs in method_args_and_kwargs:
-            if sioyek:
-                sioyek.set_status_string('trying to download "{}" from {}'.format(paper_name, method_name))
+            set_sioyek_status_if_exists('trying to download "{}" from {}'.format(paper_name, method_name))
             try:
                 callback(*method_args, **method_kwargs)
             except Exception as e:
-                if sioyek:
-                    sioyek.set_status_string('error in download from {}'.format(method_name))
+                set_sioyek_status_if_exists('error in download from {}'.format(method_name))
             pdf_files = listing_diff.new_pdf_files()
             if len(pdf_files) > 0:
                 returned_file = download_dir / pdf_files[0]
@@ -303,8 +301,7 @@ def download_paper_with_doi(doi_string, paper_name, doi_map):
                     listing_diff.reset()
 
         if len(ignored_files) > 0:
-            if sioyek:
-                sioyek.set_status_string('could not find a suitable paper, this is a throw in the dark')
+            set_sioyek_status_if_exists('could not find a suitable paper, this is a throw in the dark')
             return ignored_files[0]
 
     return None
@@ -327,6 +324,14 @@ def get_bibtex(doi):
         bibtex = f.read().decode()
         return bibtex
 
+def set_sioyek_status_if_exists(status):
+    if sioyek:
+        sioyek.set_status_string(status)
+
+def clear_sioyek_status_path_if_exists():
+    if sioyek:
+        sioyek.clear_status_string()
+    
 if __name__ == '__main__':
     mode = sys.argv[1]
     SIOYEK_PATH = clean_path(sys.argv[2])
@@ -348,7 +353,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 5:
         USER_EMAIL = sys.argv[5]
 
-    sioyek.set_status_string('finding doi ...')
+    set_sioyek_status_if_exists('finding doi ...')
     try:
 
         doi = get_doi_with_name(sys.argv[3])
@@ -356,19 +361,26 @@ if __name__ == '__main__':
             if mode == 'download':
                 # show_status('downloading doi: {}'.format(doi))
                 file_name = get_paper_file_name_with_doi_and_name(doi, paper_name)
-                sioyek.clear_status_string()
+                directory, file_name = os.path.split(file_name)
+
+                valid_file_name = slugify(file_name)
+                valid_file_path = os.path.join(directory, valid_file_name)
+                old_file_path = os.path.join(directory, file_name)
+
+                shutil.move(old_file_path, valid_file_path)
+                clear_sioyek_status_path_if_exists()
                 if file_name:
-                    subprocess.run([SIOYEK_PATH, str(file_name), '--new-window'])
+                    subprocess.run([SIOYEK_PATH, str(valid_file_path), '--new-window'])
             else:
                 bibtex = get_bibtex(doi)
                 pyperclip.copy(bibtex)
-                sioyek.clear_status_string()
+                clear_sioyek_status_path_if_exists()
 
         else:
-            sioyek.set_status_string('doi not found')
+            set_sioyek_status_if_exists('doi not found')
             time.sleep(5)
-            sioyek.clear_status_string()
+            clear_sioyek_status_path_if_exists()
     except Exception as e:
-        sioyek.set_status_string('error: {}'.format(str(e)))
+        set_sioyek_status_if_exists('error: {}'.format(str(e)))
         time.sleep(5)
-        sioyek.clear_status_string()
+        clear_sioyek_status_path_if_exists()
