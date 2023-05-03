@@ -3,7 +3,7 @@ Allows sioyek to automatically download papers from scihub by clicking on their 
 
 Here is an example `prefs_user.config` file which uses this script:
 
-    new_command _download_paper_under_cursor python -m sioyek.paper_downloader download "%{sioyek_path}" "%{paper_name}"
+    new_command _download_paper_under_cursor python -m sioyek.paper_downloader download "%{sioyek_path}" "%{selected_text}" "%{paper_name}" "[YOUR_EMAIL]"
     control_click_command _download_paper_under_cursor
 
 Now, you can control+click on paper names to download them and open them in sioyek.
@@ -17,6 +17,7 @@ This script can also be used to copy the bibtex of paper under cursor:
 PAPERS_FOLDER_PATH = None
 SIOYEK_PATH = None
 PYTHON_EXECUTABLE = 'python'
+USER_EMAIL = ''
 
 sioyek = None
 
@@ -29,6 +30,7 @@ import time
 import regex
 import urllib.request
 import fitz
+import requests
 
 import pyperclip
 from appdirs import user_data_dir
@@ -122,23 +124,66 @@ def get_doi_with_name(paper_name):
         return None
     return response['message']['items'][0]['DOI']
 
+def get_pdf_via_unpaywall(doi, paper_name):
+    print(f"Getting DOI {doi} from Unpaywall")
+    if sioyek:
+        sioyek.set_status_string(f"Getting DOI {doi} from Unpaywall")
+    unpaywall_url = f"https://api.unpaywall.org/v2/{doi}?email={USER_EMAIL}"
+    unpaywall_resp = requests.get(unpaywall_url)
+    if unpaywall_resp.status_code == 404:
+        print(f"DOI {doi} not found in Unpaywall")
+        raise Exception(f"DOI {doi} not found in Unpaywall")
+
+    print(f"Got DOI {doi} from Unpaywall")
+    unpaywall_resp_json = unpaywall_resp.json()
+
+    if(
+        'best_oa_location' not in unpaywall_resp_json or
+        unpaywall_resp_json['best_oa_location'] is None or
+        'url_for_pdf' not in unpaywall_resp_json['best_oa_location']
+    ):
+        print(f"DOI {doi} not found in Unpaywall")
+        raise Exception(f"DOI {doi} not found in Unpaywall")
+
+    print(f"Got PDF URL for DOI {doi} from Unpaywall")
+    pdf_url = unpaywall_resp_json['best_oa_location']['url_for_pdf']
+
+    if pdf_url is None:
+        print(f"DOI {doi} not found in Unpaywall")
+        raise Exception(f"DOI {doi} not found in Unpaywall")
+
+    print(f"Downloading {pdf_url} from Unpaywall")
+
+    if sioyek:
+        sioyek.set_status_string(f"Downloading {pdf_url} from Unpaywall")
+
+    pdf_path = get_papers_folder_path() / (paper_name + '.pdf')
+
+    print(f"Saving {pdf_url} to {pdf_path}")
+    with open(pdf_path, 'wb+') as outfile:
+        outfile.write(requests.get(pdf_url).content)
+
+    return pdf_path
+
 def download_paper_with_doi(doi_string, paper_name, doi_map):
     download_dir = get_papers_folder_path()
     method_args_and_kwargs = [
-        ("google scholar", (paper_name, 1, [1], download_dir, None), {}),
-        ("scihub", ("", None, None, download_dir, None), {'DOIs': [doi_string]}),
+        ("scihub", start_paper_download, ("", None, None, download_dir, None), {'DOIs': [doi_string]}),
+        ("unpaywall", get_pdf_via_unpaywall, (doi_string, paper_name), {}),
     ]
 
     with ListingDiff(download_dir) as listing_diff:
 
         ignored_files = []
 
-        for method_name, method_args, method_kwargs in method_args_and_kwargs:
-            sioyek.set_status_string('trying to download "{}" from {}'.format(paper_name, method_name))
+        for method_name, callback, method_args, method_kwargs in method_args_and_kwargs:
+            if sioyek:
+                sioyek.set_status_string('trying to download "{}" from {}'.format(paper_name, method_name))
             try:
-                start_paper_download(*method_args, **method_kwargs)
+                callback(*method_args, **method_kwargs)
             except Exception as e:
-                sioyek.set_status_string('error in download from {}'.format(method_name))
+                if sioyek:
+                    sioyek.set_status_string('error in download from {}'.format(method_name))
             pdf_files = listing_diff.new_pdf_files()
             if len(pdf_files) > 0:
                 returned_file = download_dir / pdf_files[0]
@@ -151,7 +196,8 @@ def download_paper_with_doi(doi_string, paper_name, doi_map):
                     listing_diff.reset()
 
         if len(ignored_files) > 0:
-            sioyek.set_status_string('could not find a suitable paper, this is a throw in the dark')
+            if sioyek:
+                sioyek.set_status_string('could not find a suitable paper, this is a throw in the dark')
             return ignored_files[0]
 
     return None
@@ -175,11 +221,25 @@ def get_bibtex(doi):
         return bibtex
 
 if __name__ == '__main__':
-
     mode = sys.argv[1]
     SIOYEK_PATH = clean_path(sys.argv[2])
     sioyek = Sioyek(SIOYEK_PATH)
-    paper_name = clean_paper_name(sys.argv[3])
+    selected = sys.argv[3]
+    parsed = sys.argv[4]
+
+    paper_name = ""
+    chose_paper = False
+    if len(selected) != 2:
+        paper_name = selected
+    elif len(parsed) != 2:
+        paper_name = parsed
+        chose_paper = True
+
+    if chose_paper:
+        paper_name = clean_paper_name(paper_name)
+
+    if len(sys.argv) > 5:
+        USER_EMAIL = sys.argv[5]
 
     sioyek.set_status_string('finding doi ...')
     try:
