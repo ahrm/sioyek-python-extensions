@@ -31,11 +31,13 @@ import regex
 import urllib.request
 import fitz
 import requests
+from difflib import SequenceMatcher
 
 import pyperclip
 from appdirs import user_data_dir
 from habanero import Crossref
 from PyPaperBot.__main__ import start as start_paper_download
+from libgen_api import LibgenSearch
 
 from .sioyek import Sioyek, clean_path
 
@@ -122,7 +124,19 @@ def get_doi_with_name(paper_name):
     response = crossref.works(query=paper_name)
     if len(response['message']['items']) == 0:
         return None
-    return response['message']['items'][0]['DOI']
+    
+    closest_match = None
+    closest_match_ratio = 0
+
+    for item in response['message']['items']:
+        title = item['title'][0]
+        ratio = SequenceMatcher(None, title, paper_name).ratio()
+        if ratio > closest_match_ratio:
+            closest_match_ratio = ratio
+            closest_match = item
+        if closest_match_ratio == 1:
+            break
+    return closest_match['DOI']
 
 def get_pdf_via_unpaywall(doi, paper_name):
     print(f"Getting DOI {doi} from Unpaywall")
@@ -142,24 +156,55 @@ def get_pdf_via_unpaywall(doi, paper_name):
         unpaywall_resp_json['best_oa_location'] is None or
         'url_for_pdf' not in unpaywall_resp_json['best_oa_location']
     ):
-        print(f"DOI {doi} not found in Unpaywall")
-        raise Exception(f"DOI {doi} not found in Unpaywall")
+        print(f"No Link for DOI {doi} in Unpaywall")
+        raise Exception(f"No Link for DOI {doi} in Unpaywall")
 
     print(f"Got PDF URL for DOI {doi} from Unpaywall")
     pdf_url = unpaywall_resp_json['best_oa_location']['url_for_pdf']
 
     if pdf_url is None:
-        print(f"DOI {doi} not found in Unpaywall")
-        raise Exception(f"DOI {doi} not found in Unpaywall")
+        print(f"No PDF URL for DOI {doi} in Unpaywall")
+        raise Exception(f"No PDF URL for DOI {doi} in Unpaywall")
 
     print(f"Downloading {pdf_url} from Unpaywall")
 
     if sioyek:
         sioyek.set_status_string(f"Downloading {pdf_url} from Unpaywall")
 
-    pdf_path = get_papers_folder_path() / (paper_name + '.pdf')
+    pdf_path = get_papers_folder_path() / (unpaywall_resp_json['title'] + ' - Unpaywall.pdf')
 
     print(f"Saving {pdf_url} to {pdf_path}")
+    with open(pdf_path, 'wb+') as outfile:
+        outfile.write(requests.get(pdf_url).content)
+
+    return pdf_path
+
+def get_book_via_libgen(book_name):
+    s = LibgenSearch()
+
+    print(f"Getting book {book_name} from Libgen")
+
+    if sioyek:
+        sioyek.set_status_string(f"Getting book {book_name} from Libgen")
+
+    results = s.search_title_filtered(book_name, {"Extension": "pdf"})
+
+    if len(results) == 0:
+        print(f"Book {book_name} not found in Libgen")
+        raise Exception(f"Book {book_name} not found in Libgen")
+
+    print(f"Got book {book_name} from Libgen")
+
+    pdf_url = s.resolve_download_links(results[0])['Cloudflare']
+    print(f"Downloading {pdf_url} from Libgen")
+
+    if sioyek:
+        sioyek.set_status_string(f"Downloading {pdf_url} from Libgen")
+
+    pdf_path = get_papers_folder_path() / (results[0]["Title"] + ' - Libgen.pdf')
+
+    print(f"Saving {pdf_url} to {pdf_path}")
+
     with open(pdf_path, 'wb+') as outfile:
         outfile.write(requests.get(pdf_url).content)
 
@@ -182,9 +227,16 @@ def get_pdf_via_crossref(doi_string, paper_name):
 
     crossref_resp_json = crossref_resp.json()
 
-    if 'message' not in crossref_resp_json or 'link' not in crossref_resp_json['message']:
+    if 'message' not in crossref_resp_json:
         print(f"DOI {doi_string} not found in Crossref")
         raise Exception(f"DOI {doi_string} not found in Crossref")
+
+    if 'link' not in crossref_resp_json['message'] and 'ISBN' in crossref_resp_json['message']:
+        return get_book_via_libgen(paper_name)
+
+    if 'link' not in crossref_resp_json['message']:
+        print(f"No link for {doi_string} in Crossref")
+        raise Exception(f"No link for {doi_string} in Crossref")
 
     pdf_url = None
     for link in crossref_resp_json['message']['link']:
@@ -193,12 +245,15 @@ def get_pdf_via_crossref(doi_string, paper_name):
             pdf_url = possible_url
             break
         
-        if link['content-type'] == 'application/pdf' or link['intended-application'] == 'similarity-checking':
+        if(
+            link['content-type'] == 'application/pdf' or
+            link['intended-application'] == 'similarity-checking'
+        ):
             pdf_url = possible_url
             break
             
     if pdf_url is None:
-        print(f"DOI {doi_string} not found in Crossref")
+        print(f"No PDF URL for {doi_string} in Crossref")
         raise Exception(f"DOI {doi_string} not found in Crossref")
 
     print(f"Downloading {pdf_url} from Crossref")
@@ -206,7 +261,7 @@ def get_pdf_via_crossref(doi_string, paper_name):
     if sioyek:
         sioyek.set_status_string(f"Downloading {pdf_url} from Crossref")
 
-    pdf_path = get_papers_folder_path() / (paper_name + '.pdf')
+    pdf_path = get_papers_folder_path() / (crossref_resp_json['message']['title'][0] + ' - Crossref.pdf')
 
     print(f"Saving {pdf_url} to {pdf_path}")
 
@@ -219,9 +274,9 @@ def get_pdf_via_crossref(doi_string, paper_name):
 def download_paper_with_doi(doi_string, paper_name, doi_map):
     download_dir = get_papers_folder_path()
     method_args_and_kwargs = [
-        ("scihub", start_paper_download, ("", None, None, download_dir, None), {'DOIs': [doi_string]}),
         ("unpaywall", get_pdf_via_unpaywall, (doi_string, paper_name), {}),
         ("crossref", get_pdf_via_crossref, (doi_string, paper_name), {}),
+        ("scihub", start_paper_download, ("", None, None, download_dir, None), {'DOIs': [doi_string]}),
     ]
 
     with ListingDiff(download_dir) as listing_diff:
