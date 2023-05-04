@@ -43,6 +43,18 @@ from slugify import slugify
 
 from .sioyek import Sioyek, clean_path
 
+def clean_pdf_name(pdf_name):
+    directory, pdf_name = os.path.split(pdf_name)
+    print(f"file_name: {pdf_name}, directory: {directory}")
+    pdf_name, extension = os.path.splitext(pdf_name)
+    print(f"file_name: {pdf_name}, extension: {extension}")
+
+    valid_file_name = slugify(pdf_name)
+    valid_file_name = valid_file_name + extension
+    print(f"valid_file_name: {valid_file_name}")
+
+    valid_file_path = os.path.join(directory, valid_file_name)
+    return valid_file_path
 
 def clean_paper_name(paper_name):
     first_quote_index = -1
@@ -187,6 +199,7 @@ def get_pdf_via_unpaywall(doi, paper_name):
 
     valid_filename = slugify(unpaywall_resp_json['title'])
     pdf_path = get_papers_folder_path() / (valid_filename + '-Unpaywall.pdf')
+    pdf_path = clean_pdf_name(pdf_path)
 
     with open(pdf_path, 'wb+') as outfile:
         outfile.write(requests.get(pdf_url, verify=False).content)
@@ -211,7 +224,7 @@ def get_book_via_libgen(book_name):
 
     valid_filename = slugify(results[0]["Title"])
     pdf_path = get_papers_folder_path() / (valid_filename + '-Libgen.pdf')
-
+    pdf_path = clean_pdf_name(pdf_path)
 
     with open(pdf_path, 'wb+') as outfile:
         outfile.write(requests.get(pdf_url, verify=False).content)
@@ -262,11 +275,10 @@ def get_pdf_via_crossref(doi_string, paper_name):
 
     valid_filename = slugify(crossref_resp_json['message']['title'][0])
     pdf_path = get_papers_folder_path() / (valid_filename + '-Crossref.pdf')
-
+    pdf_path = clean_pdf_name(pdf_path)
 
     with open(pdf_path, 'wb+') as outfile:
         outfile.write(requests.get(pdf_url, verify=False).content)
-
 
     return pdf_path
 
@@ -293,9 +305,13 @@ def download_paper_with_doi(doi_string, paper_name, doi_map):
             pdf_files = listing_diff.new_pdf_files()
             if len(pdf_files) > 0:
                 returned_file = download_dir / pdf_files[0]
-                doi_map[doi_string] = str(returned_file)
+                pdf_path = str(returned_file)
+                clean_path = clean_pdf_name(pdf_path)
+                if clean_path != pdf_path:
+                    shutil.move(pdf_path, clean_path)
+                doi_map[doi_string] = clean_path
                 write_cache_doi_map(doi_map)
-                return str(returned_file)
+                return str(clean_path)
 
     return None
 
@@ -360,18 +376,9 @@ if __name__ == '__main__':
                 if file_name is None:
                     raise Exception("Could not download paper, all options failed.")
 
-                directory, file_name = os.path.split(file_name)
-
-                valid_file_name = slugify(file_name)
-
-                valid_file_path = os.path.join(directory, valid_file_name)
-
-                old_file_path = os.path.join(directory, file_name)
-
-                shutil.move(old_file_path, valid_file_path)
                 clear_sioyek_status_path_if_exists()
                 if file_name:
-                    subprocess.run([SIOYEK_PATH, str(valid_file_path), '--new-window'])
+                    subprocess.run([SIOYEK_PATH, str(file_name), '--new-window'])
             else:
                 bibtex = get_bibtex(doi)
                 pyperclip.copy(bibtex)
