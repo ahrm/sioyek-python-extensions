@@ -170,6 +170,10 @@ def get_doi_with_name(paper_name):
 
     return closest_match['DOI']
 
+def is_link_a_pdf(link):
+    resp = requests.head(link, allow_redirects=True, verify=False)
+    return resp.status_code == 200 and resp.headers['Content-Type'] == 'application/pdf'
+
 def get_pdf_via_unpaywall(doi, paper_name):
     set_sioyek_status_if_exists(f"Getting DOI {doi} from Unpaywall")
 
@@ -192,10 +196,10 @@ def get_pdf_via_unpaywall(doi, paper_name):
     if pdf_url is None:
         raise Exception(f"No PDF URL for DOI {doi} in Unpaywall")
 
-    pdf_resp = requests.get(pdf_url, verify=False)
-
-    if pdf_resp.status_code != 200 or pdf_resp.headers['content-type'] != 'application/pdf':
+    if not is_link_a_pdf(pdf_url):
         raise Exception(f"PDF Download failed for DOI {doi} from Unpaywall")
+
+    pdf_resp = requests.get(pdf_url, verify=False)
 
     set_sioyek_status_if_exists(f"Downloading {pdf_url} from Unpaywall")
 
@@ -220,10 +224,10 @@ def get_book_via_libgen(book_name):
 
     pdf_url = s.resolve_download_links(results[0])['Cloudflare']
 
-    pdf_resp = requests.get(pdf_url, verify=False)
-
-    if pdf_resp.status_code != 200 or pdf_resp.headers['content-type'] != 'application/pdf':
+    if not is_link_a_pdf(pdf_url):
         raise Exception(f"PDF Download failed for book {book_name} from Libgen")
+
+    pdf_resp = requests.get(pdf_url, verify=False)
 
     set_sioyek_status_if_exists(f"Downloading {pdf_url} from Libgen")
 
@@ -256,18 +260,18 @@ def get_pdf_via_crossref(doi_string, paper_name):
     if 'link' not in crossref_resp_json['message']:
         raise Exception(f"No link for {doi_string} in Crossref")
 
-    pdf_content = None
+    pdf_url = None
     for link in crossref_resp_json['message']['link']:
         possible_url = link['URL']
 
-        possible_content = requests.get(possible_url, verify=False)
-        if possible_content.status_code == 200 and possible_content.headers['content-type'] == 'application/pdf':
-            pdf_content = possible_content.content
+        if is_link_a_pdf(possible_url):
             pdf_url = possible_url
             break
 
-    if pdf_content is None:
+    if pdf_url is None:
         raise Exception(f"DOI {doi_string} not found in Crossref")
+
+    pdf_content = requests.get(pdf_url, verify=False).content
 
     set_sioyek_status_if_exists(f"Downloading {pdf_url} from Crossref")
 
