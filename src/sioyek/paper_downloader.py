@@ -152,7 +152,7 @@ def get_doi_with_name(paper_name):
     response = crossref.works(query=paper_name)
     if len(response['message']['items']) == 0:
         return None
-    
+ 
     closest_match = None
     closest_match_ratio = 0
     cleaned_title = clean_paper_name(paper_name).lower()
@@ -163,11 +163,11 @@ def get_doi_with_name(paper_name):
         title = item['title'][0].lower()
         ratio = SequenceMatcher(None, title, cleaned_title).ratio()
         if ratio > closest_match_ratio:
-            old_title = closest_match['title'] if closest_match else None
             closest_match_ratio = ratio
             closest_match = item
         if closest_match_ratio == 1:
             break
+
     return closest_match['DOI']
 
 def get_pdf_via_unpaywall(doi, paper_name):
@@ -192,6 +192,10 @@ def get_pdf_via_unpaywall(doi, paper_name):
     if pdf_url is None:
         raise Exception(f"No PDF URL for DOI {doi} in Unpaywall")
 
+    pdf_resp = requests.get(pdf_url, verify=False)
+
+    if pdf_resp.status_code != 200 or pdf_resp.headers['content-type'] != 'application/pdf':
+        raise Exception(f"PDF Download failed for DOI {doi} from Unpaywall")
 
     set_sioyek_status_if_exists(f"Downloading {pdf_url} from Unpaywall")
 
@@ -200,12 +204,7 @@ def get_pdf_via_unpaywall(doi, paper_name):
     pdf_path = clean_pdf_name(pdf_path)
 
     with open(pdf_path, 'wb+') as outfile:
-        response = requests.get(pdf_url, stream=True)
-
-        if response.status_code == 200 and response.headers['content-type'] == 'application/pdf':
-            outfile.write(response.content)
-        else:
-            raise Exception(f"PDF Download failed for DOI {doi} from Unpaywall")
+        outfile.write(pdf_resp.content)
 
     return pdf_path
 
@@ -219,8 +218,12 @@ def get_book_via_libgen(book_name):
     if len(results) == 0:
         raise Exception(f"Book {book_name} not found in Libgen")
 
-
     pdf_url = s.resolve_download_links(results[0])['Cloudflare']
+
+    pdf_resp = requests.get(pdf_url, verify=False)
+
+    if pdf_resp.status_code != 200 or pdf_resp.headers['content-type'] != 'application/pdf':
+        raise Exception(f"PDF Download failed for book {book_name} from Libgen")
 
     set_sioyek_status_if_exists(f"Downloading {pdf_url} from Libgen")
 
@@ -229,12 +232,7 @@ def get_book_via_libgen(book_name):
     pdf_path = clean_pdf_name(pdf_path)
 
     with open(pdf_path, 'wb+') as outfile:
-        resp = requests.get(pdf_url, verify=False)
-
-        if resp.status_code == 200 and resp.headers['Content-Type'] == 'application/pdf':
-            outfile.write(resp.content)
-        else:
-            raise Exception(f"Book {book_name} not found in Libgen")
+        outfile.write(pdf_resp.content)
     return pdf_path
 
 def get_pdf_via_crossref(doi_string, paper_name):
@@ -258,7 +256,6 @@ def get_pdf_via_crossref(doi_string, paper_name):
     if 'link' not in crossref_resp_json['message']:
         raise Exception(f"No link for {doi_string} in Crossref")
 
-    pdf_url = None
     pdf_content = None
     for link in crossref_resp_json['message']['link']:
         possible_url = link['URL']
@@ -269,8 +266,7 @@ def get_pdf_via_crossref(doi_string, paper_name):
             pdf_url = possible_url
             break
 
-            
-    if pdf_url is None:
+    if pdf_content is None:
         raise Exception(f"DOI {doi_string} not found in Crossref")
 
     set_sioyek_status_if_exists(f"Downloading {pdf_url} from Crossref")
@@ -280,14 +276,7 @@ def get_pdf_via_crossref(doi_string, paper_name):
     pdf_path = clean_pdf_name(pdf_path)
 
     with open(pdf_path, 'wb+') as outfile:
-        if pdf_content is not None:
-            outfile.write(pdf_content)
-        else:
-            resp = requests.get(pdf_url, verify=False)
-            if resp.status_code == 200 and resp.headers['content-type'] == 'application/pdf':
-                outfile.write(resp.content)
-            else:
-                raise Exception(f"Could not download {pdf_url} from Crossref, best match {pdf_url} was not a pdf")
+        outfile.write(pdf_content)
 
     return pdf_path
 
