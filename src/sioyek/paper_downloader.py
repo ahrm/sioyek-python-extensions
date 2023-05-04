@@ -54,11 +54,27 @@ def clean_paper_name(paper_name):
     except ValueError as e:
         pass
 
-    if first_quote_index != -1 and last_quote_index != -1 and (last_quote_index - first_quote_index) > 10:
-        return paper_name[first_quote_index + 1:last_quote_index]
+    if first_quote_index != -1 and last_quote_index != -1 and (last_quote_index - first_quote_index) > 5:
+        paper_name = paper_name[first_quote_index + 1:last_quote_index]
 
     paper_name = paper_name.strip()
-    if paper_name.endswith('.'):
+
+    period_index = -1
+    cur_len = len(paper_name)
+
+    while cur_len >= 5:
+        try:
+            period_index = paper_name.index('.')
+        except ValueError as e:
+            break
+
+        cur_len -= period_index + 1
+        if cur_len < 5:
+            break
+
+        paper_name = paper_name[period_index + 1:]
+
+    if paper_name.endswith("."):
         paper_name = paper_name[:-1]
 
     return paper_name
@@ -129,11 +145,15 @@ def get_doi_with_name(paper_name):
     
     closest_match = None
     closest_match_ratio = 0
+    cleaned_title = clean_paper_name(paper_name).lower()
 
     for item in response['message']['items']:
-        title = item['title'][0]
-        ratio = SequenceMatcher(None, title, paper_name).ratio()
+        if 'title' not in item:
+            continue
+        title = item['title'][0].lower()
+        ratio = SequenceMatcher(None, title, cleaned_title).ratio()
         if ratio > closest_match_ratio:
+            old_title = closest_match['title'] if closest_match else None
             closest_match_ratio = ratio
             closest_match = item
         if closest_match_ratio == 1:
@@ -141,16 +161,13 @@ def get_doi_with_name(paper_name):
     return closest_match['DOI']
 
 def get_pdf_via_unpaywall(doi, paper_name):
-    print(f"Getting DOI {doi} from Unpaywall")
     set_sioyek_status_if_exists(f"Getting DOI {doi} from Unpaywall")
 
     unpaywall_url = f"https://api.unpaywall.org/v2/{doi}?email={USER_EMAIL}"
     unpaywall_resp = requests.get(unpaywall_url)
     if unpaywall_resp.status_code == 404:
-        print(f"DOI {doi} not found in Unpaywall")
         raise Exception(f"DOI {doi} not found in Unpaywall")
 
-    print(f"Got DOI {doi} from Unpaywall")
     unpaywall_resp_json = unpaywall_resp.json()
 
     if(
@@ -158,84 +175,69 @@ def get_pdf_via_unpaywall(doi, paper_name):
         unpaywall_resp_json['best_oa_location'] is None or
         'url_for_pdf' not in unpaywall_resp_json['best_oa_location']
     ):
-        print(f"No Link for DOI {doi} in Unpaywall")
         raise Exception(f"No Link for DOI {doi} in Unpaywall")
 
-    print(f"Got PDF URL for DOI {doi} from Unpaywall")
     pdf_url = unpaywall_resp_json['best_oa_location']['url_for_pdf']
 
     if pdf_url is None:
-        print(f"No PDF URL for DOI {doi} in Unpaywall")
         raise Exception(f"No PDF URL for DOI {doi} in Unpaywall")
 
-    print(f"Downloading {pdf_url} from Unpaywall")
 
     set_sioyek_status_if_exists(f"Downloading {pdf_url} from Unpaywall")
 
     valid_filename = slugify(unpaywall_resp_json['title'])
     pdf_path = get_papers_folder_path() / (valid_filename + '-Unpaywall.pdf')
 
-    print(f"Saving {pdf_url} to {pdf_path}")
     with open(pdf_path, 'wb+') as outfile:
-        outfile.write(requests.get(pdf_url).content)
+        outfile.write(requests.get(pdf_url, verify=False).content)
 
     return pdf_path
 
 def get_book_via_libgen(book_name):
     s = LibgenSearch()
 
-    print(f"Getting book {book_name} from Libgen")
 
     set_sioyek_status_if_exists(f"Getting book {book_name} from Libgen")
 
     results = s.search_title_filtered(book_name, {"Extension": "pdf"})
 
     if len(results) == 0:
-        print(f"Book {book_name} not found in Libgen")
         raise Exception(f"Book {book_name} not found in Libgen")
 
-    print(f"Got book {book_name} from Libgen")
 
     pdf_url = s.resolve_download_links(results[0])['Cloudflare']
-    print(f"Downloading {pdf_url} from Libgen")
 
     set_sioyek_status_if_exists(f"Downloading {pdf_url} from Libgen")
 
     valid_filename = slugify(results[0]["Title"])
     pdf_path = get_papers_folder_path() / (valid_filename + '-Libgen.pdf')
 
-    print(f"Saving {pdf_url} to {pdf_path}")
 
     with open(pdf_path, 'wb+') as outfile:
-        outfile.write(requests.get(pdf_url).content)
+        outfile.write(requests.get(pdf_url, verify=False).content)
 
     return pdf_path
 
 def get_pdf_via_crossref(doi_string, paper_name):
     crossref_url = f"https://api.crossref.org/works/{doi_string}"
 
-    print(f"Getting DOI {doi_string} from Crossref")
 
     set_sioyek_status_if_exists(f"Getting DOI {doi_string} from Crossref")
 
     crossref_resp = requests.get(crossref_url)
     if crossref_resp.status_code == 404:
-        print(f"DOI {doi_string} not found in Crossref")
         raise Exception(f"DOI {doi_string} not found in Crossref")
 
-    print(f"Got DOI {doi_string} from Crossref")
 
     crossref_resp_json = crossref_resp.json()
 
     if 'message' not in crossref_resp_json:
-        print(f"DOI {doi_string} not found in Crossref")
         raise Exception(f"DOI {doi_string} not found in Crossref")
 
     if 'link' not in crossref_resp_json['message'] and 'ISBN' in crossref_resp_json['message']:
         return get_book_via_libgen(paper_name)
 
     if 'link' not in crossref_resp_json['message']:
-        print(f"No link for {doi_string} in Crossref")
         raise Exception(f"No link for {doi_string} in Crossref")
 
     pdf_url = None
@@ -253,20 +255,17 @@ def get_pdf_via_crossref(doi_string, paper_name):
             break
             
     if pdf_url is None:
-        print(f"No PDF URL for {doi_string} in Crossref")
         raise Exception(f"DOI {doi_string} not found in Crossref")
 
-    print(f"Downloading {pdf_url} from Crossref")
 
     set_sioyek_status_if_exists(f"Downloading {pdf_url} from Crossref")
 
     valid_filename = slugify(crossref_resp_json['message']['title'][0])
     pdf_path = get_papers_folder_path() / (valid_filename + '-Crossref.pdf')
 
-    print(f"Saving {pdf_url} to {pdf_path}")
 
     with open(pdf_path, 'wb+') as outfile:
-        outfile.write(requests.get(pdf_url).content)
+        outfile.write(requests.get(pdf_url, verify=False).content)
 
 
     return pdf_path
@@ -276,33 +275,27 @@ def download_paper_with_doi(doi_string, paper_name, doi_map):
     method_args_and_kwargs = [
         ("unpaywall", get_pdf_via_unpaywall, (doi_string, paper_name), {}),
         ("crossref", get_pdf_via_crossref, (doi_string, paper_name), {}),
-        ("scihub", start_paper_download, ("", None, None, download_dir, None), {'DOIs': [doi_string]}),
+        ("scihub", start_paper_download, ("", None, None, str(download_dir), None), {'DOIs': [doi_string]}),
     ]
 
     with ListingDiff(download_dir) as listing_diff:
-
-        ignored_files = []
-
         for method_name, callback, method_args, method_kwargs in method_args_and_kwargs:
             set_sioyek_status_if_exists('trying to download "{}" from {}'.format(paper_name, method_name))
             try:
-                callback(*method_args, **method_kwargs)
+                file_name = callback(*method_args, **method_kwargs)
             except Exception as e:
                 set_sioyek_status_if_exists('error in download from {}'.format(method_name))
+                continue
+
+            if file_name is not None:
+                return file_name
+
             pdf_files = listing_diff.new_pdf_files()
             if len(pdf_files) > 0:
                 returned_file = download_dir / pdf_files[0]
-                if is_file_a_paper_with_name(str(returned_file), paper_name):
-                    doi_map[doi_string] = str(returned_file)
-                    write_cache_doi_map(doi_map)
-                    return returned_file
-                else:
-                    ignored_files.append(returned_file)
-                    listing_diff.reset()
-
-        if len(ignored_files) > 0:
-            set_sioyek_status_if_exists('could not find a suitable paper, this is a throw in the dark')
-            return ignored_files[0]
+                doi_map[doi_string] = str(returned_file)
+                write_cache_doi_map(doi_map)
+                return str(returned_file)
 
     return None
 
@@ -356,15 +349,20 @@ if __name__ == '__main__':
     set_sioyek_status_if_exists('finding doi ...')
     try:
 
-        doi = get_doi_with_name(sys.argv[3])
+        doi = get_doi_with_name(paper_name)
         if doi:
             if mode == 'download':
                 # show_status('downloading doi: {}'.format(doi))
                 file_name = get_paper_file_name_with_doi_and_name(doi, paper_name)
+                if file_name is None:
+                    raise Exception("Could not download paper, all options failed.")
+
                 directory, file_name = os.path.split(file_name)
 
                 valid_file_name = slugify(file_name)
+
                 valid_file_path = os.path.join(directory, valid_file_name)
+
                 old_file_path = os.path.join(directory, file_name)
 
                 shutil.move(old_file_path, valid_file_path)
