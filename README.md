@@ -10,7 +10,7 @@ Addons:
 ### -`paper_downloader`
 Download the paper name under cursor from google scholar or scihub and open the document. To enable add this to your `prefs_user.config`:
 ```
-new_command _download_paper python -m sioyek.paper_downloader download "%{sioyek_path}" "%{paper_name}"
+new_command _download_paper python -m sioyek.paper_downloader download "%{sioyek_path}" "%{selected_text}" "%{paper_name}" [Your Email, If Ssing Unpaywall]
 control_click_command _download_paper
 ```
 Now you can download papers by control-clicking on their names like this:
