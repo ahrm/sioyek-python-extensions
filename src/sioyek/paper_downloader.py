@@ -304,7 +304,9 @@ def download_paper_with_doi(doi_string, paper_name, doi_map):
             if len(pdf_files) > 0:
                 returned_file = download_dir / pdf_files[0]
                 pdf_path = str(returned_file)
-                clean_path = clean_pdf_name(pdf_path)
+                filename, ext = os.path.splitext(pdf_path)
+                pdf_path_with_method = f"{filename}-{method_name}{ext}"
+                clean_path = clean_pdf_name(pdf_path_with_method)
                 if clean_path != pdf_path:
                     shutil.move(pdf_path, clean_path)
                 doi_map[doi_string] = clean_path
