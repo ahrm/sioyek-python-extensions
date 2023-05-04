@@ -329,8 +329,8 @@ if __name__ == '__main__':
     mode = sys.argv[1]
     SIOYEK_PATH = clean_path(sys.argv[2])
     sioyek = Sioyek(SIOYEK_PATH)
-    selected = sys.argv[3]
-    parsed = sys.argv[4]
+    parsed = sys.argv[3]
+    selected = sys.argv[4]
 
     paper_name = ""
     chose_paper = False
