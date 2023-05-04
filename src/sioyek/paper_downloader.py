@@ -100,7 +100,6 @@ def is_file_a_paper_with_name(file_name, paper_name):
         return True
     return False
 
-
 class ListingDiff():
     def __init__(self, path):
         self.path = path
@@ -136,7 +135,6 @@ def write_cache_doi_map(doi_map):
     json_path = get_papers_folder_path() / 'doi_map.json'
     with open(json_path, 'w') as outfile:
         json.dump(doi_map, outfile)
-
 
 def get_papers_folder_path_():
     if PAPERS_FOLDER_PATH != None:
@@ -202,13 +200,17 @@ def get_pdf_via_unpaywall(doi, paper_name):
     pdf_path = clean_pdf_name(pdf_path)
 
     with open(pdf_path, 'wb+') as outfile:
-        outfile.write(requests.get(pdf_url, verify=False).content)
+        response = requests.get(pdf_url, stream=True)
+
+        if response.status_code == 200 and response.headers['content-type'] == 'application/pdf':
+            outfile.write(response.content)
+        else:
+            raise Exception(f"PDF Download failed for DOI {doi} from Unpaywall")
 
     return pdf_path
 
 def get_book_via_libgen(book_name):
     s = LibgenSearch()
-
 
     set_sioyek_status_if_exists(f"Getting book {book_name} from Libgen")
 
@@ -227,13 +229,16 @@ def get_book_via_libgen(book_name):
     pdf_path = clean_pdf_name(pdf_path)
 
     with open(pdf_path, 'wb+') as outfile:
-        outfile.write(requests.get(pdf_url, verify=False).content)
+        resp = requests.get(pdf_url, verify=False)
 
+        if resp.status_code == 200 and resp.headers['Content-Type'] == 'application/pdf':
+            outfile.write(resp.content)
+        else:
+            raise Exception(f"Book {book_name} not found in Libgen")
     return pdf_path
 
 def get_pdf_via_crossref(doi_string, paper_name):
     crossref_url = f"https://api.crossref.org/works/{doi_string}"
-
 
     set_sioyek_status_if_exists(f"Getting DOI {doi_string} from Crossref")
 
@@ -254,22 +259,19 @@ def get_pdf_via_crossref(doi_string, paper_name):
         raise Exception(f"No link for {doi_string} in Crossref")
 
     pdf_url = None
+    pdf_content = None
     for link in crossref_resp_json['message']['link']:
         possible_url = link['URL']
-        if possible_url.endswith('.pdf'):
+
+        possible_content = requests.get(possible_url, verify=False)
+        if possible_content.status_code == 200 and possible_content.headers['content-type'] == 'application/pdf':
+            pdf_content = possible_content.content
             pdf_url = possible_url
             break
-        
-        if(
-            link['content-type'] == 'application/pdf' or
-            link['intended-application'] == 'similarity-checking'
-        ):
-            pdf_url = possible_url
-            break
+
             
     if pdf_url is None:
         raise Exception(f"DOI {doi_string} not found in Crossref")
-
 
     set_sioyek_status_if_exists(f"Downloading {pdf_url} from Crossref")
 
@@ -278,15 +280,22 @@ def get_pdf_via_crossref(doi_string, paper_name):
     pdf_path = clean_pdf_name(pdf_path)
 
     with open(pdf_path, 'wb+') as outfile:
-        outfile.write(requests.get(pdf_url, verify=False).content)
+        if pdf_content is not None:
+            outfile.write(pdf_content)
+        else:
+            resp = requests.get(pdf_url, verify=False)
+            if resp.status_code == 200 and resp.headers['content-type'] == 'application/pdf':
+                outfile.write(resp.content)
+            else:
+                raise Exception(f"Could not download {pdf_url} from Crossref, best match {pdf_url} was not a pdf")
 
     return pdf_path
 
 def download_paper_with_doi(doi_string, paper_name, doi_map):
     download_dir = get_papers_folder_path()
     method_args_and_kwargs = [
-        ("unpaywall", get_pdf_via_unpaywall, (doi_string, paper_name), {}),
         ("crossref", get_pdf_via_crossref, (doi_string, paper_name), {}),
+        ("unpaywall", get_pdf_via_unpaywall, (doi_string, paper_name), {}),
         ("scihub", start_paper_download, ("", None, None, str(download_dir), None), {'DOIs': [doi_string]}),
     ]
 
