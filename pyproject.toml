@@ -7,6 +7,7 @@ name = "sioyek"
 version = "0.31.10"
 authors = [
   { name="Ali Mostafavi", email="a.hr.mostafavi@gmail.com" },
+  { name="Garrett Credi", email="garrettcredi@gmail.com" }
 ]
 description = "Python tools and extensions for sioyek PDF reader"
 readme = "README.md"
@@ -26,7 +27,9 @@ dependencies = [
   "pyperclip  >= 1.8",
   "habanero >= 1.2.2",
   "regex >= 2.5.83",
-  "PyQt5 >= 5.15"
+  "PyQt5 >= 5.15",
+  "libgen-api >= 1.0.0",
+  "python-slugify >= 8.0.1"
 ]
 
 [project.urls]
