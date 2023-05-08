@@ -82,7 +82,7 @@ https://user-images.githubusercontent.com/6392321/205931274-ef2b20e5-0aec-478c-9
 
 Config:
 ```
-new_command _remove_annotations python -m sioyek.remove_annotation "%{sioyek_path}" "%{local_database}" "%{shared_database}" "%{file_path}" "%{selected_rect}"
+new_command _remove_annotations python -m sioyek.remove_annotation "%{sioyek_path}" "%{local_database}" "%{shared_database}" "%{file_path}" %{selected_rect}
 ```
 
 ### -`add_text`
@@ -95,8 +95,8 @@ https://user-images.githubusercontent.com/6392321/205931938-938da231-8f2c-4f85-9
 
 Config:
 ```
-new_command _add_text python -m sioyek.add_text "%{sioyek_path}" "%{local_database}" "%{shared_database}" "%{file_path}" "%{selected_rect}" "%{command_text}"
-new_command _add_red_text python -m sioyek.add_text "%{sioyek_path}" "%{local_database}" "%{shared_database}" "%{file_path}" "%{selected_rect}" "%{command_text}" fontsize=5 text_color=255,0,0
+new_command _add_text python -m sioyek.add_text "%{sioyek_path}" "%{local_database}" "%{shared_database}" "%{file_path}" %{selected_rect} "%{command_text}"
+new_command _add_red_text python -m sioyek.add_text "%{sioyek_path}" "%{local_database}" "%{shared_database}" "%{file_path}" %{selected_rect} "%{command_text}" fontsize=5 text_color=255,0,0
 ```
 
 
