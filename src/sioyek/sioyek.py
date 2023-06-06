@@ -1060,7 +1060,13 @@ class Document:
         cum_height = 0
         for i in range(self.doc.page_count):
             page = self.doc.load_page(i)
-            width, height = page.mediabox_size
+            # can't simply use the page's mediabox because some documents have non-zero origin
+            # see https://github.com/ahrm/sioyek-python-extensions/issues/2#issuecomment-1578255778 
+            # width, height = page.mediabox_size
+            cropbox = page.cropbox
+            width = cropbox[2] - cropbox[0]
+            height = cropbox[3] - cropbox[1]
+
             self.page_heights.append(height)
             self.page_widths.append(width)
             self.cum_page_heights.append(cum_height)
