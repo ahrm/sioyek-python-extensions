@@ -3,6 +3,7 @@ from .sioyek import Sioyek, clean_path
 from collections import defaultdict
 
 def parse_rect(s):
+    s = s.strip("'").strip('"')
     parts = s.split(',')
     page = int(parts[0])
     rect = [float(part) for part in parts[1:]]
